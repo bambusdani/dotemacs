@@ -1,0 +1,316 @@
+;; -------~-------~--~------------------~------
+;; GENERAL
+;; -------~-------~--~------------------~------
+(scroll-bar-mode -1)
+(winner-mode 1)
+
+(setq inhibit-splash-screen t)
+(setq inhibit-startup-message t)
+(setq auto-save-default nil)
+(setq make-backup-files nil)
+(require 'undo-tree)
+
+(add-to-list 'custom-theme-load-path "~/.emacs.d/themes")
+(load-file "~/.emacs.d/themes/base16-theme.el")
+(load-theme 'base16-default-dark t)
+
+(set-default-font "Source Code Pro-9")
+
+;; evil mode
+(require 'evil)
+(evil-mode t)
+
+;; -------~-------~--~------------------~------
+;; KEYBINDINGS
+;; -------~-------~--~------------------~------
+(global-set-key [f7]  'new-frame)
+(global-set-key [f8]  'split-window-horizontally)
+(global-set-key [f9]  'split-window-vertically)
+(global-set-key [f12] 'kill-buffer)
+(global-set-key [f11] 'delete-window)
+
+;; -------~-------~--~------------------~------
+;; VM
+;; -------~-------~--~------------------~------
+(require 'vm-autoloads)
+(require 'smtpmail)
+
+(setq vm-enable-addons t)
+(setq mail-user-agend 'vm-user-agend)
+(setq toolbar-mail-reader 'vm)
+
+(setq vm-auto-get-new-mail                  t)
+(setq vm-mutable-windows                    t)
+(setq vm-startup-with-summary               t)
+(setq vm-mail-window-percentage             20)
+(setq vm-inhibit-startup-message            t)
+(setq vm-skip-deleted-messages              nil)
+(setq vm-skip-read-messages                 nil)
+(setq vm-folder-read-only                   nil)
+(setq vm-circular-folders                   t)
+(setq vm-preview-lines                      t)
+(setq vm-trust-From_-with-Content-Length    t)
+(setq vm-frame-per-folder                   nil)
+(setq vm-frame-per-composition              nil)
+(setq vm-delete-after-saving                t)
+(setq vm-folder-directory                   "~/Documents/mail")
+(setq vm-imap-folder-cache-directory        "~/Documents/mail/cache")
+(setq mail-archive-file-name                "~/Documents/mail/sent/sent")
+(setq vm-reply-subject-prefix               "Re:")
+(setq mail-default-reply-to                 "user@mail")
+(setq user-full-name                        "Full Name")
+(setq user-mail-address                     "user@mail")
+(setq vm-mail-header-from                   "user@mail")
+
+(setq vm-imap-account-alist '(
+                ("imap-ssl:MAILSERV:993:*:login:LOGIN:*" "NAME")))
+(setq vm-primary-inbox "imap-ssl:MAILSERV:993:inbox:login:LOGIN:*")
+
+(setq send-mail-function 'smtpmail-send-it)
+(setq message-send-mail-function 'smtpmail-send-it)
+(setq smtpmail-smtp-server "smtpserv.uni-tuebingen.de")
+(setq smtpmail-auth-credentials '(("SMTPSERV" 25 nil nil)))
+
+; mailto-compose
+(defun mailto-compose-mail (mailto-url)
+  "Parse MAILTO-URL and start composing mail."
+  (if (and (stringp mailto-url)
+           (string-match "\\`mailto:" mailto-url))
+      (progn
+        (require 'rfc2368)
+        (require 'rfc2047)
+        (require 'mailheader)
+
+        (let ((hdr-alist (rfc2368-parse-mailto-url mailto-url))
+              (body "")
+              to subject
+              ;; In addition to To, Subject and Body these headers are
+              ;; allowed:
+              (allowed-xtra-hdrs '(cc bcc in-reply-to)))
+
+          (with-temp-buffer
+            ;; Extract body if it's defined
+            (when (assoc "Body" hdr-alist)
+              (dolist (hdr hdr-alist)
+                (when (equal "Body" (car hdr))
+                  (insert (format "%s\n" (cdr hdr)))))
+              (rfc2047-decode-region (point-min) (point-max))
+              (setq body (buffer-substring-no-properties
+                          (point-min) (point-max)))
+              (erase-buffer))
+
+            ;; Extract headers
+            (dolist (hdr hdr-alist)
+              (unless (equal "Body" (car hdr))
+                (insert (format "%s: %s\n" (car hdr) (cdr hdr)))))
+            (rfc2047-decode-region (point-min) (point-max))
+            (goto-char (point-min))
+            (setq hdr-alist (mail-header-extract-no-properties)))
+
+          (setq to (or (cdr (assq 'to hdr-alist)) "")
+                subject (or (cdr (assq 'subject hdr-alist)) "")
+                hdr-alist
+                (remove nil (mapcar
+                             #'(lambda (item)
+                                 (when (memq (car item) allowed-xtra-hdrs)
+                                   (cons (capitalize (symbol-name (car item)))
+                                         (cdr item))))
+                             hdr-alist)))
+
+          (compose-mail to subject hdr-alist nil nil
+                        (list (lambda (string)
+                                (insert string))
+                              body))))
+    (compose-mail)))
+
+;; -------~-------~--~------------------~------
+;; MIME
+;; -------~-------~--~------------------~------
+;; disable auto decode of MIME messages
+;; type Shift+D to decode (vm-decode-mime-message)
+(setq vm-auto-decode-mime-messages nil)
+
+;; do MIME
+(setq vm-display-using-mime t)
+
+; no decoding of uuencoded MIME objects
+(setq vm-mime-uuencode-decoder-program nil)
+
+; mime types that are displayed immediately after decoding
+(setq vm-auto-displayed-mime-content-types '("text/plain" "multipart"))
+
+; exception list
+(setq vm-auto-displayed-mime-content-type-exceptions nil)
+
+; MIME types that are displayed internally within Emacs ; ANHANGKILLER
+(setq vm-mime-internal-content-types '("text/plain" "multipart"))
+
+; list of external viewers for the types to be displayed externally
+(setq vm-mime-external-content-types-aliast
+      '(("image"                "display")
+        ("video"                "xanim")
+        ("applicaiton/pdf"      "evince")
+        ("applicaiton/msword"   "libreoffice")))
+
+; exception list
+(setq vm-mime-external-content-type-exceptions nil)
+
+; kill external viewer processes when a new message in the current folder is selected
+(setq vm-mime-delete-viewer-processes t)
+
+; list of MIME types that are converted to a type VM can display
+(setq vm-mime-type-converter-alist nil)
+
+; external MIME handler
+(setq vm-mime-alternative-select-method 'all)
+(setq vm-mime-text/html-handler "lynx")
+
+; mail-abbrevs 23.3.14
+(load-library "mailabbrev")
+(add-hook 'mail-setup-hook 'mail-abbrevs-setup)
+
+
+; -------~-------~--~------------------~------
+; CALENDAR
+; -------~-------~--~------------------~------
+(european-calendar)
+(setq european-calendar-style 't)
+
+(setq cal-tex-diary t)
+
+;--------------- for important entries ---------
+
+(require 'appt)
+
+(defun cfw:open-diary-calendar ()
+  (interactive)
+  (let* ((source1 (cfw:cal-create-source)) ;; default diary file "~/diary"
+         (source2   (make-cfw:source
+                     :name "calendar diary"
+                     :color "White" ;; foreground color
+                     :opt-face '(:background "#e04030") ;; background color
+                     :data (lambda (begin end)
+                             (let ((diary-file "~/diary2")) ;; important diary file
+                               (cfw:cal-schedule-period-to-calendar begin end)))))
+         (cp (cfw:create-calendar-component-buffer
+              :view 'month
+              :custom-map cfw:cal-schedule-map
+              :contents-sources (list source1 source2))))
+    (switch-to-buffer (cfw:cp-get-buffer cp))))
+
+;--------------- sorting diary entrys ----------
+
+(add-hook 'list-diary-entries-hook 'sort-diary-entries t)
+;=================holidays nach "calendarsetting"  7.10.11
+
+(setq calendar-week-start-day 1)
+; euro-cal verhindert marking; repariert druch Umstellug des diary-files
+(setq calendar-time-display-form
+      '(24-hours ":" minutes (and time-zone (concat " (" time-zone ")"))))
+
+
+(setq calendar-day-name-array
+      ["Sonntag" "Montag" "Dienstag" "Mittwoch"
+       "Donnerstag" "Freitag" "Sonnabend"])
+
+
+(setq calendar-month-name-array
+      ["Januar" "Februar" "März" "April" "Mai" "Juni"
+       "Juli" "August" "September" "Oktober" "November" "Dezember"])
+
+(setq solar-n-hemi-seasons
+      '("Frühlingsanfang" "Sommeranfang" "Herbstanfang" "Winteranfang"))
+
+(setq general-holidays
+      '((holiday-fixed 1 1 "Neujahr")
+        (holiday-fixed 5 1 "1. Mai")
+        (holiday-fixed 10 3 "Tag der Deutschen Einheit")))
+
+(setq christian-holidays
+      '(
+        (holiday-float 12 0 -4 "1. Advent" 24)
+        (holiday-float 12 0 -3 "2. Advent" 24)
+        (holiday-float 12 0 -2 "3. Advent" 24)
+        (holiday-float 12 0 -1 "4. Advent" 24)
+        (holiday-fixed 12 25 "1. Weihnachtstag")
+        (holiday-fixed 12 26 "2. Weihnachtstag")
+        (holiday-fixed 1 6 "Heilige Drei Könige")
+        ;; Date of Easter calculation taken from holidays.el.
+        (let* ((century (1+ (/ displayed-year 100)))
+               (shifted-epact (% (+ 14 (* 11 (% displayed-year 19))
+                                    (- (/ (* 3 century) 4))
+                                    (/ (+ 5 (* 8 century)) 25)
+                                    (* 30 century))
+                                 30))
+               (adjusted-epact (if (or (= shifted-epact 0)
+                                       (and (= shifted-epact 1)
+                                            (< 10 (% displayed-year 19))))
+                                   (1+ shifted-epact)
+                                 shifted-epact))
+               (paschal-moon (- (calendar-absolute-from-gregorian
+                                 (list 4 19 displayed-year))
+                                adjusted-epact))
+               (easter (calendar-dayname-on-or-before 0 (+ paschal-moon 7))))
+          (filter-visible-calendar-holidays
+           (mapcar
+            (lambda (l)
+              (list (calendar-gregorian-from-absolute (+ easter (car l)))
+                    (nth 1 l)))
+            '(
+;              (-48 "Rosenmontag")
+              ( -2 "Karfreitag")
+              (  0 "Ostersonntag")
+              ( +1 "Ostermontag")
+              (+39 "Christi Himmelfahrt")
+              (+49 "Pfingstsonntag")
+              (+50 "Pfingstmontag")
+              (+60 "Happy Cadaver")
+              ))))
+;        (holiday-fixed 8 15 "Mariä Himmelfahrt")
+        (holiday-fixed 11 1 "Allerdingens")
+;        (holiday-float 11 3 1 "Buß- und Bettag" 16)
+        (holiday-float 11 0 1 "Totensonntag" 20)))
+
+(setq calendar-holidays
+      (append general-holidays local-holidays other-holidays
+              christian-holidays solar-holidays))
+
+
+;=================ende holidays========================
+
+;---------- appointment notification -----------
+
+(display-time)
+(add-hook 'diary-hook 'appt-make-list)
+(diary 0)
+
+
+;---------- defining schedule for university recognizing hollidays -----------
+
+
+; command  &%%(diary-schedule 22 4 2003 1 8 2003 2) 18:00 Informatik
+;	   &%%(diary-schedule STARTDATE ENDDATE WEEKDAY) STARTTIME NAMEOFENTRY
+
+(defun diary-schedule (m1 d1 y1 m2 d2 y2 dayname)
+      "Entry applies if date is between dates on DAYNAME.
+    Order of the parameters is M1, D1, Y1, M2, D2, Y2 if
+    `european-calendar-style' is nil, and D1, M1, Y1, D2, M2, Y2 if
+    `european-calendar-style' is t. Entry does not apply on a history."
+      (let ((date1 (calendar-absolute-from-gregorian
+                    (if european-calendar-style
+                        (list d1 m1 y1)
+                      (list m1 d1 y1))))
+            (date2 (calendar-absolute-from-gregorian
+                    (if european-calendar-style
+                        (list d2 m2 y2)
+                      (list m2 d2 y2))))
+            (d (calendar-absolute-from-gregorian date)))
+        (if (and
+             (<= date1 d)
+             (<= d date2)
+             (= (calendar-day-of-week date) dayname)
+             (not (check-calendar-holidays date))
+             )
+             entry)))
+
+; vim:syntax=lisp
